@@ -22,8 +22,6 @@ import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
-
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -64,16 +62,20 @@ public class WateringSyncCron {
     @Scheduled(cron = "{cron.expr}")
     void cronJobWithExpressionInConfig() {
         handleLeipzigGiesstWaterings();
-        //handleGiessDenKiezWaterings();
-        //handleMagdeburgGiesstWaterings();
+        handleGiessDenKiezWaterings();
+        handleMagdeburgGiesstWaterings();
         //listExistingTdgWaterings();
+    }
+
+    private LocalDateTime getToday() {
+        return LocalDateTime.of(2025, 7, 4, 0, 0, 0);
     }
 
     private void handleGiessDenKiezWaterings() {
         String apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imllb2t4YnF2cWVkcGN5dndtcnNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE2Njc5OTkxMTQsImV4cCI6MTk4MzU3NTExNH0.ESC1pG1DvzxN8e6rmS9jdEnbuffwMIAIhGZ3g7sOhyQ";
         String bearerToken = "Bearer " + apiKey;
         var todays = giessDenKiezTodaysWateringsRestClient.getTodaysWaterings(apiKey, bearerToken);
-        var todayDate = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS);
+        var todayDate = getToday();
         for (var today : todays) {
             var id = "in.(" + today.treeId + ")";
             var location = giessDenKiezTreesRestClient.getTreesLocations(apiKey, bearerToken, id);
@@ -128,7 +130,7 @@ public class WateringSyncCron {
         String apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4dXB3cWlydHd3cWpsZWNlc2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAyNDA1MzksImV4cCI6MjA1NTgxNjUzOX0.Cc_TFsvs7-J5GOk2tnuU_osDu5PJrz4rDMRAISRzp0c";
         String bearerToken = "Bearer " + apiKey;
         var todays = magdeburgGiesstTodaysWateringsRestClient.getTodaysWaterings(apiKey, bearerToken);
-        var todayDate = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS);
+        var todayDate = getToday();
         for (var today : todays) {
             var id = "in.(" + today.treeId + ")";
             var location = magdeburgGiesstTreesRestClient.getTreesLocations(apiKey, bearerToken, id);
@@ -154,7 +156,7 @@ public class WateringSyncCron {
     }
 
     private void handleLeipzigGiesstWaterings() {
-        var today = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS);
+        var today = getToday();
         List<TreeWatered> treesWatered = TreeWatered.list("SELECT tw FROM TreeWatered tw WHERE tw.timestamp >= :date", Parameters.with("date", today)).stream().map(tw -> (TreeWatered) tw).toList();
         System.out.println("LeipzigGiesst Watered: " + treesWatered.size());
         for (var treeWatered : treesWatered) {
@@ -168,20 +170,6 @@ public class WateringSyncCron {
             tdgWateringTO.liter = Integer.parseInt(treeWatered.amount);
             tdgWateringTO.watertype = WaterType.NOT_SPECIFIED;
             fillEntity(tdgWateringTO, tdgWatering, treeWatered.tree.id);
-        }
-
-        //var watered = leipzigGiesstRestClient.getLast30DaysWaterings().data.stream().filter(e -> !"0".equals(e.watered)).toList();
-        //System.out.println("LeipzigGiesst Watered: " + watered.size());
-    }
-
-    private void listExistingTdgWaterings() {
-        var result = Watering.findAll();
-        try {
-            var first = (Watering) result.list().getFirst();
-            //var firstWatering = objectMapper.reader().readValue(first.properties, WateringTO.class);
-            System.out.println("Waterings: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(first));
-        } catch (IOException e) {
-            System.out.println(e.getMessage());
         }
     }
 }

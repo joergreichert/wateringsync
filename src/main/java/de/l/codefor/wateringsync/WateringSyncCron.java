@@ -135,8 +135,8 @@ public class WateringSyncCron {
                     tdgWatering.created = watering.timestamp.toLocalDateTime();
                     WateringTO tdgWateringTO = new WateringTO();
                     tdgWateringTO.date = tdgWatering.created;
-                    tdgWateringTO.latitude = location.getLast().lng; // needs to be switched, as GdK has it still wrong
-                    tdgWateringTO.longitude = location.getLast().lat;
+                    tdgWateringTO.latitude = location.getLast().lat;
+                    tdgWateringTO.longitude = location.getLast().lng;
                     tdgWateringTO.name = "MagdeburgGiesst-WateringId-" + watering.treeId + "__" + watering.id;
                     tdgWateringTO.liter = watering.amount;
                     tdgWateringTO.watertype = WaterType.NOT_SPECIFIED;

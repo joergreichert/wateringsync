@@ -1,0 +1,8 @@
+services:
+  wateringsync:
+    build: ./src/main/docker/Dockerfile.jvm
+    env_file:
+      - ./.env
+    ports:
+      - 8095:8080
+

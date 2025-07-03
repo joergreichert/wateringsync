@@ -1,4 +1,4 @@
-package de.l.codefor.wateringsync.to;
+package de.l.codefor.wateringsync.supabase.to;
 
 import java.time.LocalDateTime;
 

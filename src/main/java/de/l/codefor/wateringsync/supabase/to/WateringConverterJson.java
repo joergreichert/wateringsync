@@ -1,4 +1,4 @@
-package de.l.codefor.wateringsync.to;
+package de.l.codefor.wateringsync.supabase.to;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;

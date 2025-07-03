@@ -1,4 +1,4 @@
-package de.l.codefor.wateringsync.bo;
+package de.l.codefor.wateringsync.supabase.bo;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;

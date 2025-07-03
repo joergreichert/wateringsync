@@ -8,6 +8,9 @@ import de.l.codefor.wateringsync.giessdenkiez.GiessDenKiezTreesRestClient;
 import de.l.codefor.wateringsync.giessdenkiez.GiessDenKiezTreesWateringsClient;
 import de.l.codefor.wateringsync.giessdenkiez.to.TreeRequest;
 import de.l.codefor.wateringsync.leipziggiesst.LeipzigGiesstRestClient;
+import de.l.codefor.wateringsync.mdgiesst.MagdeburgGiesstTodaysWateringsRestClient;
+import de.l.codefor.wateringsync.mdgiesst.MagdeburgGiesstTreesRestClient;
+import de.l.codefor.wateringsync.mdgiesst.MagdeburgGiesstTreesWateringsClient;
 import de.l.codefor.wateringsync.to.WaterType;
 import de.l.codefor.wateringsync.to.WateringTO;
 import io.quarkus.scheduler.Scheduled;
@@ -43,11 +46,24 @@ public class WateringSyncCron {
     @RestClient
     GiessDenKiezTreesWateringsClient giessDenKiezTreesWateringsClient;
 
+    @Inject
+    @RestClient
+    MagdeburgGiesstTodaysWateringsRestClient magdeburgGiesstTodaysWateringsRestClient;
+
+    @Inject
+    @RestClient
+    MagdeburgGiesstTreesRestClient magdeburgGiesstTreesRestClient;
+
+    @Inject
+    @RestClient
+    MagdeburgGiesstTreesWateringsClient magdeburgGiesstTreesWateringsClient;
+
     @Scheduled(cron = "{cron.expr}")
     @Transactional
     void cronJobWithExpressionInConfig() {
         //handleLeipzigGiesstWaterings();
-        handleGiessDenKiezWaterings();
+        //handleGiessDenKiezWaterings();
+        handleMagdeburgGiesstWaterings();
         //listExistingTdgWaterings();
     }
 
@@ -72,6 +88,56 @@ public class WateringSyncCron {
                     tdgWateringTO.latitude = location.getLast().lng; // needs to be switched, as GdK has it still wrong
                     tdgWateringTO.longitude = location.getLast().lat;
                     tdgWateringTO.name = "GiessDenKiez-WateringId-" + watering.treeId + "__" + watering.id;
+                    tdgWateringTO.liter = watering.amount;
+                    tdgWateringTO.watertype = WaterType.NOT_SPECIFIED;
+                    if (tdgWateringTO.longitude != null && tdgWateringTO.latitude != null) {
+                        GeometryFactory geometryFactory = new GeometryFactory(new org.locationtech.jts.geom.PrecisionModel(), 4326);
+                        Coordinate coordinate = new Coordinate(tdgWateringTO.longitude, tdgWateringTO.latitude);
+                        tdgWatering.geom = geometryFactory.createPoint(coordinate);
+                        try {
+                            tdgWatering.properties = objectMapper.writeValueAsString(tdgWateringTO);
+                            var query = Watering.getEntityManager().createNativeQuery("select w from waterings w WHERE w.properties->> 'name' = '" + tdgWateringTO.name + "'");
+                            int size = query.getResultList().size();
+                            if (size == 0) {
+                                tdgWatering.persistAndFlush();
+                                try {
+                                    System.out.println("Derived TdG Watering: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(tdgWatering));
+                                } catch (JsonProcessingException e) {
+                                    System.out.println(e.getMessage());
+                                }
+                            }
+                        } catch (JsonProcessingException e) {
+                            System.out.println(e.getMessage());
+                        }
+                    } else {
+                        System.out.println("No lat or lon found for tree " + treeRequest.treeId);
+                    }
+                }
+            }
+        }
+    }
+
+    private void handleMagdeburgGiesstWaterings() {
+        String apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4dXB3cWlydHd3cWpsZWNlc2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAyNDA1MzksImV4cCI6MjA1NTgxNjUzOX0.Cc_TFsvs7-J5GOk2tnuU_osDu5PJrz4rDMRAISRzp0c";
+        String bearerToken = "Bearer " + apiKey;
+        var todays = magdeburgGiesstTodaysWateringsRestClient.getTodaysWaterings(apiKey, bearerToken);
+        var todayDate = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS);
+        for (var today : todays) {
+            var id = "in.(" + today.treeId + ")";
+            var location = magdeburgGiesstTreesRestClient.getTreesLocations(apiKey, bearerToken, id);
+            var treeRequest = new TreeRequest();
+            treeRequest.treeId = today.treeId;
+            var waterings = magdeburgGiesstTreesWateringsClient.getWaterings(apiKey, bearerToken, treeRequest);
+            for (var watering : waterings) {
+                var timestamp = watering.timestamp.toLocalDateTime();
+                if (timestamp.isEqual(todayDate) || timestamp.isAfter(todayDate)) {
+                    Watering tdgWatering = new Watering();
+                    tdgWatering.created = watering.timestamp.toLocalDateTime();
+                    WateringTO tdgWateringTO = new WateringTO();
+                    tdgWateringTO.date = tdgWatering.created;
+                    tdgWateringTO.latitude = location.getLast().lng; // needs to be switched, as GdK has it still wrong
+                    tdgWateringTO.longitude = location.getLast().lat;
+                    tdgWateringTO.name = "MagdeburgGiesst-WateringId-" + watering.treeId + "__" + watering.id;
                     tdgWateringTO.liter = watering.amount;
                     tdgWateringTO.watertype = WaterType.NOT_SPECIFIED;
                     if (tdgWateringTO.longitude != null && tdgWateringTO.latitude != null) {

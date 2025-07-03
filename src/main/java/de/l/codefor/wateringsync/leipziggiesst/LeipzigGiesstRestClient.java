@@ -1,4 +1,4 @@
-package de.l.codefor.wateringsync;
+package de.l.codefor.wateringsync.leipziggiesst;
 
 import de.l.codefor.wateringsync.to.WateredAndAdoptedResponse;
 import jakarta.ws.rs.GET;

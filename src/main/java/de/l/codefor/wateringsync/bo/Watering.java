@@ -1,10 +1,14 @@
 package de.l.codefor.wateringsync.bo;
 
-import com.fasterxml.jackson.annotation.JsonRawValue;
-import de.l.codefor.wateringsync.to.WateringConverterJson;
-import de.l.codefor.wateringsync.to.WateringTO;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Type;
+import com.bedatadriven.jackson.datatype.jts.serialization.GeometryDeserializer;
+import com.bedatadriven.jackson.datatype.jts.serialization.GeometrySerializer;
+import org.locationtech.jts.geom.Point;
 
 import java.time.LocalDateTime;
 
@@ -13,11 +17,14 @@ import java.time.LocalDateTime;
 @Cacheable
 public class Watering extends PanacheEntity {
 
+    @Type(JsonType.class)
     @Column(name = "properties", columnDefinition = "jsonb")
-    @Convert(converter = WateringConverterJson.class)
-    public WateringTO properties;
+    public String properties;
 
     public LocalDateTime created;
 
-    //public org.postgresql.geometric.PGpoint geom;
+    @Column(columnDefinition = "geometry(Point,4326)")
+    @JsonSerialize(using = GeometrySerializer.class)
+    @JsonDeserialize(using = GeometryDeserializer.class)
+    public Point geom;
 }

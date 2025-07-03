@@ -3,13 +3,24 @@ package de.l.codefor.wateringsync;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.l.codefor.wateringsync.bo.Watering;
+import de.l.codefor.wateringsync.giessdenkiez.GiessDenKiezTodaysWateringsRestClient;
+import de.l.codefor.wateringsync.giessdenkiez.GiessDenKiezTreesRestClient;
+import de.l.codefor.wateringsync.giessdenkiez.GiessDenKiezTreesWateringsClient;
+import de.l.codefor.wateringsync.giessdenkiez.to.TreeRequest;
+import de.l.codefor.wateringsync.leipziggiesst.LeipzigGiesstRestClient;
+import de.l.codefor.wateringsync.to.WaterType;
 import de.l.codefor.wateringsync.to.WateringTO;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 
 @ApplicationScoped
 public class WateringSyncCron {
@@ -18,12 +29,84 @@ public class WateringSyncCron {
 
     @Inject
     @RestClient
-    LeipzigGiesstRestClient restClient;
+    LeipzigGiesstRestClient leipzigGiesstRestClient;
+
+    @Inject
+    @RestClient
+    GiessDenKiezTodaysWateringsRestClient giessDenKiezTodaysWateringsRestClient;
+
+    @Inject
+    @RestClient
+    GiessDenKiezTreesRestClient giessDenKiezTreesRestClient;
+
+    @Inject
+    @RestClient
+    GiessDenKiezTreesWateringsClient giessDenKiezTreesWateringsClient;
 
     @Scheduled(cron = "{cron.expr}")
+    @Transactional
     void cronJobWithExpressionInConfig() {
-        var watered = restClient.getLast30DaysWaterings().data.stream().filter(e -> !"0".equals(e.watered)).toList();
-        System.out.println("Watered: " + watered.size());
+        //handleLeipzigGiesstWaterings();
+        handleGiessDenKiezWaterings();
+        //listExistingTdgWaterings();
+    }
+
+    private void handleGiessDenKiezWaterings() {
+        String apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imllb2t4YnF2cWVkcGN5dndtcnNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE2Njc5OTkxMTQsImV4cCI6MTk4MzU3NTExNH0.ESC1pG1DvzxN8e6rmS9jdEnbuffwMIAIhGZ3g7sOhyQ";
+        String bearerToken = "Bearer " + apiKey;
+        var todays = giessDenKiezTodaysWateringsRestClient.getTodaysWaterings(apiKey, bearerToken);
+        var todayDate = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS);
+        for (var today : todays) {
+            var id = "in.(" + today.treeId + ")";
+            var location = giessDenKiezTreesRestClient.getTreesLocations(apiKey, bearerToken, id);
+            var treeRequest = new TreeRequest();
+            treeRequest.treeId = today.treeId;
+            var waterings = giessDenKiezTreesWateringsClient.getWaterings(apiKey, bearerToken, treeRequest);
+            for (var watering : waterings) {
+                var timestamp = watering.timestamp.toLocalDateTime();
+                if (timestamp.isEqual(todayDate) || timestamp.isAfter(todayDate)) {
+                    Watering tdgWatering = new Watering();
+                    tdgWatering.created = watering.timestamp.toLocalDateTime();
+                    WateringTO tdgWateringTO = new WateringTO();
+                    tdgWateringTO.date = tdgWatering.created;
+                    tdgWateringTO.latitude = location.getLast().lng; // needs to be switched, as GdK has it still wrong
+                    tdgWateringTO.longitude = location.getLast().lat;
+                    tdgWateringTO.name = "GiessDenKiez-WateringId-" + watering.treeId + "__" + watering.id;
+                    tdgWateringTO.liter = watering.amount;
+                    tdgWateringTO.watertype = WaterType.NOT_SPECIFIED;
+                    if (tdgWateringTO.longitude != null && tdgWateringTO.latitude != null) {
+                        GeometryFactory geometryFactory = new GeometryFactory(new org.locationtech.jts.geom.PrecisionModel(), 4326);
+                        Coordinate coordinate = new Coordinate(tdgWateringTO.longitude, tdgWateringTO.latitude);
+                        tdgWatering.geom = geometryFactory.createPoint(coordinate);
+                        try {
+                            tdgWatering.properties = objectMapper.writeValueAsString(tdgWateringTO);
+                            var query = Watering.getEntityManager().createNativeQuery("select w from waterings w WHERE w.properties->> 'name' = '" + tdgWateringTO.name + "'");
+                            int size = query.getResultList().size();
+                            if (size == 0) {
+                                tdgWatering.persistAndFlush();
+                                try {
+                                    System.out.println("Derived TdG Watering: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(tdgWatering));
+                                } catch (JsonProcessingException e) {
+                                    System.out.println(e.getMessage());
+                                }
+                            }
+                        } catch (JsonProcessingException e) {
+                            System.out.println(e.getMessage());
+                        }
+                    } else {
+                        System.out.println("No lat or lon found for tree " + treeRequest.treeId);
+                    }
+                }
+            }
+        }
+    }
+
+    private void handleLeipzigGiesstWaterings() {
+        var watered = leipzigGiesstRestClient.getLast30DaysWaterings().data.stream().filter(e -> !"0".equals(e.watered)).toList();
+        System.out.println("LeipzigGiesst Watered: " + watered.size());
+    }
+
+    private void listExistingTdgWaterings() {
         var result = Watering.findAll();
         try {
             var first = (Watering) result.list().getFirst();

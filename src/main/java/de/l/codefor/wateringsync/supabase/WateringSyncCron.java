@@ -22,11 +22,17 @@ import jakarta.transaction.Transactional;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.TimeZone;
 
 @ApplicationScoped
 public class WateringSyncCron {
+    private static final Logger LOGGER = LoggerFactory.getLogger(WateringSyncCron.class);
+
     @Inject
     ObjectMapper objectMapper;
 
@@ -60,10 +66,12 @@ public class WateringSyncCron {
 
     @Scheduled(cron = "{cron.expr}")
     void cronJobWithExpressionInConfig() {
+        LOGGER.info("Zeitzone zuvor {}", TimeZone.getDefault().getDisplayName());
+        TimeZone.setDefault(TimeZone.getTimeZone("Europe/Berlin"));
+        LOGGER.info("Zeitzone danach {}", TimeZone.getDefault().getDisplayName());
         handleLeipzigGiesstWaterings();
         handleGiessDenKiezWaterings();
         handleMagdeburgGiesstWaterings();
-        //listExistingTdgWaterings();
     }
 
     private LocalDateTime getToday() {
@@ -74,6 +82,7 @@ public class WateringSyncCron {
         String apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imllb2t4YnF2cWVkcGN5dndtcnNiIiwicm9sZSI6ImFub24iLCJpYXQiOjE2Njc5OTkxMTQsImV4cCI6MTk4MzU3NTExNH0.ESC1pG1DvzxN8e6rmS9jdEnbuffwMIAIhGZ3g7sOhyQ";
         String bearerToken = "Bearer " + apiKey;
         var todays = giessDenKiezTodaysWateringsRestClient.getTodaysWaterings(apiKey, bearerToken);
+        LOGGER.info("GiessDenKiez Watered: {}", todays.size());
         var todayDate = getToday();
         var tomorrow = todayDate.plusDays(1);
         for (var today : todays) {
@@ -113,16 +122,16 @@ public class WateringSyncCron {
                 if (size == 0) {
                     tdgWatering.persistAndFlush();
                     try {
-                        System.out.println("Derived TdG Watering: " + objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(tdgWatering));
+                        LOGGER.info("Derived TdG Watering: {}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(tdgWatering));
                     } catch (JsonProcessingException e) {
-                        System.out.println(e.getMessage());
+                        LOGGER.error(e.getMessage(), e);
                     }
                 }
             } catch (JsonProcessingException e) {
-                System.out.println(e.getMessage());
+                LOGGER.error(e.getMessage(), e);
             }
         } else {
-            System.out.println("No lat or lon found for tree " + treeId);
+            LOGGER.warn("No lat or lon found for tree {}. Skipping.", treeId);
         }
     }
 
@@ -130,6 +139,7 @@ public class WateringSyncCron {
         String apiKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4dXB3cWlydHd3cWpsZWNlc2hxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAyNDA1MzksImV4cCI6MjA1NTgxNjUzOX0.Cc_TFsvs7-J5GOk2tnuU_osDu5PJrz4rDMRAISRzp0c";
         String bearerToken = "Bearer " + apiKey;
         var todays = magdeburgGiesstTodaysWateringsRestClient.getTodaysWaterings(apiKey, bearerToken);
+        LOGGER.info("MagdeburgGiesst Watered: {}", todays.size());
         var todayDate = getToday();
         for (var today : todays) {
             var id = "in.(" + today.treeId + ")";
@@ -158,7 +168,7 @@ public class WateringSyncCron {
     private void handleLeipzigGiesstWaterings() {
         var today = getToday();
         List<TreeWatered> treesWatered = TreeWatered.list("SELECT tw FROM TreeWatered tw WHERE tw.timestamp >= :date", Parameters.with("date", today)).stream().map(tw -> (TreeWatered) tw).toList();
-        System.out.println("LeipzigGiesst Watered: " + treesWatered.size());
+        LOGGER.info("LeipzigGiesst Watered: {}", treesWatered.size());
         for (var treeWatered : treesWatered) {
             Watering tdgWatering = new Watering();
             tdgWatering.created = treeWatered.timestamp;

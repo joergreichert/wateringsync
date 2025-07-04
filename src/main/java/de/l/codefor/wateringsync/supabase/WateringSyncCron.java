@@ -75,6 +75,7 @@ public class WateringSyncCron {
         String bearerToken = "Bearer " + apiKey;
         var todays = giessDenKiezTodaysWateringsRestClient.getTodaysWaterings(apiKey, bearerToken);
         var todayDate = getToday();
+        var tomorrow = todayDate.plusDays(1);
         for (var today : todays) {
             var id = "in.(" + today.treeId + ")";
             var location = giessDenKiezTreesRestClient.getTreesLocations(apiKey, bearerToken, id);
@@ -83,7 +84,7 @@ public class WateringSyncCron {
             var waterings = giessDenKiezTreesWateringsClient.getWaterings(apiKey, bearerToken, treeRequest);
             for (var watering : waterings) {
                 var timestamp = watering.timestamp.toLocalDateTime();
-                if (timestamp.isEqual(todayDate) || timestamp.isAfter(todayDate)) {
+                if (timestamp.isEqual(todayDate) || (timestamp.isAfter(todayDate) && timestamp.isBefore(tomorrow))) {
                     Watering tdgWatering = new Watering();
                     tdgWatering.created = LocalDateTime.now();
                     WateringTO tdgWateringTO = new WateringTO();

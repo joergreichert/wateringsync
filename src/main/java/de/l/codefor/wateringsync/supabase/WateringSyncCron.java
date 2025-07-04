@@ -23,7 +23,6 @@ import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @ApplicationScoped
@@ -86,7 +85,7 @@ public class WateringSyncCron {
                 var timestamp = watering.timestamp.toLocalDateTime();
                 if (timestamp.isEqual(todayDate) || timestamp.isAfter(todayDate)) {
                     Watering tdgWatering = new Watering();
-                    tdgWatering.created = timestamp;
+                    tdgWatering.created = LocalDateTime.now();
                     WateringTO tdgWateringTO = new WateringTO();
                     tdgWateringTO.date = tdgWatering.created;
                     tdgWateringTO.latitude = location.getLast().lng; // needs to be switched, as GdK has it still wrong
@@ -141,7 +140,7 @@ public class WateringSyncCron {
                 var timestamp = watering.timestamp.toLocalDateTime();
                 if (timestamp.isEqual(todayDate) || timestamp.isAfter(todayDate)) {
                     Watering tdgWatering = new Watering();
-                    tdgWatering.created = watering.timestamp.toLocalDateTime();
+                    tdgWatering.created = LocalDateTime.now();
                     WateringTO tdgWateringTO = new WateringTO();
                     tdgWateringTO.date = tdgWatering.created;
                     tdgWateringTO.latitude = location.getLast().lat;

@@ -66,9 +66,6 @@ public class WateringSyncCron {
 
     @Scheduled(cron = "{cron.expr}")
     void cronJobWithExpressionInConfig() {
-        LOGGER.info("Zeitzone zuvor {}", TimeZone.getDefault().getDisplayName());
-        TimeZone.setDefault(TimeZone.getTimeZone("Europe/Berlin"));
-        LOGGER.info("Zeitzone danach {}", TimeZone.getDefault().getDisplayName());
         handleLeipzigGiesstWaterings();
         handleGiessDenKiezWaterings();
         handleMagdeburgGiesstWaterings();
